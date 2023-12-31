@@ -5,6 +5,9 @@ import os
 import time
 import functools
 from django.http import JsonResponse
+from .utils import *
+
+TOPK = 100
 
 def search(request):
     if request.method == 'GET':
@@ -16,115 +19,132 @@ def search(request):
         
         json_results = []
         set_aux = set()
-        if keytype == 'Movies':
-            json_files = os.listdir(os.path.abspath('filmdata'))
-            for json_file in json_files:
-                fp = open(os.path.abspath('filmdata') + '/' + json_file, 'r', encoding='utf8')
-                try:
-                    json_result = json.load(fp)
-                except ValueError:
-                    continue
-                fp.close()
-                name = json_result['name']
-                i = json_result['id']
-                if keyword in name and i not in set_aux:
-                    set_aux.add(i)
-                    json_results.append({
-                        'name': json_result['name']  + '（' + json_result['score'] + '分）',
-                        'score': json_result['score'],
-                        'id': i,
-                        'image': json_result['image']
-                    })
-                else:
-                    for actor in json_result['actor']:
-                        try:
-                            afp = open(os.path.abspath('stardata') + '/' + actor + '.json', 'r', encoding='utf8')
-                        except FileNotFoundError:
-                            continue
-                        try:
-                            actor_json = json.load(afp)
-                        except ValueError:
-                            continue
-                        afp.close()
-                        if keyword in actor_json['name'] and i not in set_aux:
-                            set_aux.add(i)
-                            json_results.append({
-                                'name': json_result['name']  + '（' + json_result['score'] + '分）',
-                                'score': json_result['score'],
-                                'id': json_result['id'],
-                                'image': json_result['image']
-                            })
-            json_results.sort(key=lambda file: file['score'], reverse=True)
-        elif keytype == 'Stars':
-            json_files = os.listdir(os.path.abspath('stardata'))
-            for json_file in json_files:
-                fp = open(os.path.abspath('stardata') + '/' + json_file, 'r', encoding='utf-8')
-                try:
-                    json_result = json.load(fp)
-                except ValueError:
-                    continue
-                fp.close()
-                name = json_result['name']
-                i = json_result['id']
-                if keyword in name and i not in set_aux:
-                    set_aux.add(i)
-                    json_results.append({
-                        'name': json_result['name'],
-                        'id': json_result['id'],
-                        'image': json_result['image']
-                    })
-                else:
-                    for movie in json_result['movies']:
-                        try:
-                            mfp = open(os.path.abspath('filmdata') + '/' + movie + '.json', 'r', encoding='utf-8')
-                        except  FileNotFoundError:
-                            continue
-                        try:
-                            movie_json = json.load(mfp)
-                        except ValueError:
-                            continue
-                        mfp.close()
-                        if keyword in movie_json['name'] and i not in set_aux:
-                            set_aux.add(i)
-                            json_results.append({
-                                'name': json_result['name'],
-                                'id': json_result['id'],
-                                'image': json_result['image']
-                            })
-        elif keytype == 'Comments':
-            json_files = os.listdir(os.path.abspath('filmdata'))
-            for json_file in json_files:
-                fp = open(os.path.abspath('filmdata') + '/' + json_file, 'r', encoding='utf-8')
-                try:
-                    json_result = json.load(fp)
-                except  ValueError:
-                    continue
-                fp.close()
-                for comment in json_result['comment']:
-                    if keyword in comment:
-                        times = comment.count(keyword)
-                        json_results.append({
-                                'id': json_result['id'],
-                                'name': json_result['name'],
-                                'score': json_result['score'],
-                                'image': json_result['image'],
-                                'times': times,
-                                'comment': comment
-                            })
-            def mycmp(n1, n2):
+        result_ids: (str, int) = result(keyword, TOPK)
+        for id, score in result_ids:
+            err = JsonResponse({
+            'error': 'Cannot find the file'
+            })
+            try:
+                fp = open(os.path.abspath('filmdata') + '/' + id + '.json', 'r', encoding='utf-8')               
+                json_result = json.load(fp)
+            except ValueError or FileNotFoundError:
+                return err
+            fp.close()
+            json_results.append({
+                'name': json_result['ajName'],
+                'score': score,
+                'id': id,
+                'image': "/static/img/aj.jpeg"
+            })
+        # if keytype == 'Movies':
+        #     json_files = os.listdir(os.path.abspath('filmdata'))
+        #     for json_file in json_files:
+        #         fp = open(os.path.abspath('filmdata') + '/' + json_file, 'r', encoding='utf8')
+        #         try:
+        #             json_result = json.load(fp)
+        #         except ValueError:
+        #             continue
+        #         fp.close()
+        #         name = json_result['name']
+        #         i = json_result['id']
+        #         if keyword in name and i not in set_aux:
+        #             set_aux.add(i)
+        #             json_results.append({
+        #                 'name': json_result['name']  + '（' + json_result['score'] + '分）',
+        #                 'score': json_result['score'],
+        #                 'id': i,
+        #                 'image': "/static/img/aj.jpeg"
+        #             })
+        #         else:
+        #             for actor in json_result['actor']:
+        #                 try:
+        #                     afp = open(os.path.abspath('stardata') + '/' + actor + '.json', 'r', encoding='utf8')
+        #                 except FileNotFoundError:
+        #                     continue
+        #                 try:
+        #                     actor_json = json.load(afp)
+        #                 except ValueError:
+        #                     continue
+        #                 afp.close()
+        #                 if keyword in actor_json['name'] and i not in set_aux:
+        #                     set_aux.add(i)
+        #                     json_results.append({
+        #                         'name': json_result['name']  + '（' + json_result['score'] + '分）',
+        #                         'score': json_result['score'],
+        #                         'id': json_result['id'],
+        #                         'image': json_result['image']
+        #                     })
+        #     json_results.sort(key=lambda file: file['score'], reverse=True)
+        # elif keytype == 'Stars':
+        #     json_files = os.listdir(os.path.abspath('stardata'))
+        #     for json_file in json_files:
+        #         fp = open(os.path.abspath('stardata') + '/' + json_file, 'r', encoding='utf-8')
+        #         try:
+        #             json_result = json.load(fp)
+        #         except ValueError:
+        #             continue
+        #         fp.close()
+        #         name = json_result['name']
+        #         i = json_result['id']
+        #         if keyword in name and i not in set_aux:
+        #             set_aux.add(i)
+        #             json_results.append({
+        #                 'name': json_result['name'],
+        #                 'id': json_result['id'],
+        #                 'image': json_result['image']
+        #             })
+        #         else:
+        #             for movie in json_result['movies']:
+        #                 try:
+        #                     mfp = open(os.path.abspath('filmdata') + '/' + movie + '.json', 'r', encoding='utf-8')
+        #                 except  FileNotFoundError:
+        #                     continue
+        #                 try:
+        #                     movie_json = json.load(mfp)
+        #                 except ValueError:
+        #                     continue
+        #                 mfp.close()
+        #                 if keyword in movie_json['name'] and i not in set_aux:
+        #                     set_aux.add(i)
+        #                     json_results.append({
+        #                         'name': json_result['name'],
+        #                         'id': json_result['id'],
+        #                         'image': json_result['image']
+        #                     })
+        # elif keytype == 'Comments':
+        #     json_files = os.listdir(os.path.abspath('filmdata'))
+        #     for json_file in json_files:
+        #         fp = open(os.path.abspath('filmdata') + '/' + json_file, 'r', encoding='utf-8')
+        #         try:
+        #             json_result = json.load(fp)
+        #         except  ValueError:
+        #             continue
+        #         fp.close()
+        #         for comment in json_result['comment']:
+        #             if keyword in comment:
+        #                 times = comment.count(keyword)
+        #                 json_results.append({
+        #                         'id': json_result['id'],
+        #                         'name': json_result['name'],
+        #                         'score': json_result['score'],
+        #                         'image': json_result['image'],
+        #                         'times': times,
+        #                         'comment': comment
+        #                     })
+        #     def mycmp(n1, n2):
                 
-                if n1['times'] == n2['times']:
-                    if n1['score'] < n2['score']:
-                        return 1
-                    elif n1['score'] == n2['score']:
-                        return 0
-                    else:
-                        return -1
-                elif n1['times'] < n2['times']:
-                    return 1
-                else:
-                    return -1
-            json_results.sort(key=functools.cmp_to_key(mycmp))
+        #         if n1['times'] == n2['times']:
+        #             if n1['score'] < n2['score']:
+        #                 return 1
+        #             elif n1['score'] == n2['score']:
+        #                 return 0
+        #             else:
+        #                 return -1
+        #         elif n1['times'] < n2['times']:
+        #             return 1
+        #         else:
+        #             return -1
+        #     json_results.sort(key=functools.cmp_to_key(mycmp))
         
         total_time = format(time.time() - start, '.8f')
         return JsonResponse({
@@ -140,6 +160,28 @@ def info(request):
     if request.method == 'GET':
         info_type = request.GET['type']
         info_id = request.GET['id']
+        try:
+            fp = open(os.path.abspath('filmdata') + '/' + info_id + '.json', 'r', encoding='utf-8')               
+            json_result = json.load(fp)
+        except ValueError or FileNotFoundError:
+            return err
+        fp.close()
+        return JsonResponse({
+            'id': info_id,
+            'name': json_result['ajName'],
+            'image': "/static/img/aj.jpeg",
+            'score': "100",
+            'director': "100",
+            'author': "100",
+            'actor': "100",
+            'genre': "100",
+            'location': "100",
+            'language': "100",
+            'date': "100",
+            'time': "100",
+            'description': json_result['ajjbqk'],
+            'comment': json_result['cpfxgc']
+        })
         if info_type == 'Movies' or info_type == 'Comments':
             try:
                 fp = open(os.path.abspath('filmdata') + '/' + info_id + '.json', 'r', encoding='utf-8')               
